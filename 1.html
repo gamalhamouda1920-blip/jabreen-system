@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الجبرين للنقل - الإصدار السحابي</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap');
+        :root { --primary: #1a3c6d; --accent: #27ae60; --bg: #f0f4f8; --danger: #e74c3c; }
+        body { font-family: 'Cairo', sans-serif; background: var(--bg); margin: 0; padding: 0; }
+        .container { width: 100%; max-width: 1200px; margin: 0 auto; background: #fff; min-height: 100vh; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .page { display: none; padding: 20px; animation: fadeIn 0.4s ease; }
+        .active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* التصميم العام */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: 'Cairo'; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        
+        .btn { padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; background: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; }
+        .btn-green { background: var(--accent); }
+        .btn-red { background: var(--danger); }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: var(--primary); color: white; padding: 12px; }
+        td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
+        
+        .loader { display: none; text-align: center; padding: 20px; font-weight: bold; color: var(--primary); }
+        
+        /* تنسيق الطباعة */
+        .pdf-box { width: 210mm; min-height: 270mm; padding: 10mm; background: white; margin: 0 auto; border: 1px solid #eee; }
+        .official-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid black; padding-bottom: 10px; }
+        @media print { .no-print { display: none !important; } .container { box-shadow: none; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="page-login" class="page active">
+        <div style="text-align: center; margin-top: 50px;">
+            <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-Q2OEZxF_nqZ420taE2U-Fxw4JKnUm2vahRGv7ZfviOELskARLBaUVrDpT27RN1WKbLVs-xU4ne8O1cV_SGamgkso2Okj84EFTY6N2m4K9A1y-J25aKPC5iipBmbtdnUxiDEB3YbmI0t6y95Xahtuf8lciXY4PT7iE_KY5-NPcLSAO8yRMRdzApMQK9pL/s200/Gemini_Generated_Image_gnro4fgnro4fgnro.png" width="100">
+            <h2>نظام الجبرين - الدخول السحابي</h2>
+        </div>
+        <div style="max-width: 400px; margin: 0 auto;">
+            <div class="form-group">
+                <label>اختر الموظف:</label>
+                <select id="loginUserSelect"><option>جاري تحميل الموظفين...</option></select>
+            </div>
+            <div class="form-group">
+                <label>كلمة المرور:</label>
+                <input type="password" id="loginPass" placeholder="****">
+            </div>
+            <button class="btn" onclick="handleLogin()">تسجيل الدخول</button>
+            <div id="loginLoader" class="loader">جاري التحقق...</div>
+        </div>
+    </div>
+
+    <div id="page-admin" class="page">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>لوحة الإدارة والأرشيف</h3>
+            <button class="btn btn-red" onclick="location.reload()">خروج</button>
+        </div>
+
+        <div id="admin-controls" style="background: #eef2f7; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <label>إضافة موظف جديد:</label>
+            <div class="grid" style="margin-top:10px;">
+                <input type="text" id="newUserName" placeholder="اسم الموظف">
+                <input type="text" id="newUserPass" placeholder="كلمة المرور">
+            </div>
+            <button class="btn btn-green" style="margin-top:10px; width: auto;" onclick="addNewUser()">+ إضافة الحساب للسحابة</button>
+        </div>
+
+        <button class="btn" style="margin-bottom: 20px;" onclick="showPage('page-form')">📄 إصدار أمر تحميل جديد</button>
+
+        <div style="overflow-x: auto;">
+            <label>أرشيف الطلبات (Google Sheets):</label>
+            <table>
+                <thead>
+                    <tr>
+                        <th>رقم الطلب</th><th>التاريخ</th><th>العميل</th><th>السائق</th><th>السيارة</th><th>المنتج</th><th>إجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="archiveBody"></tbody>
+            </table>
+            <div id="archiveLoader" class="loader">جاري جلب البيانات من السحابة...</div>
+        </div>
+    </div>
+
+    <div id="page-form" class="page">
+        <h3>تعبئة أمر تحميل</h3>
+        <div class="grid">
+            <div class="form-group"><label>كود العميل</label><input type="text" id="fCode"></div>
+            <div class="form-group"><label>السادة / الجهة</label><input type="text" id="fName"></div>
+            <div class="form-group"><label>اسم السائق</label><input type="text" id="fDriver"></div>
+            <div class="form-group"><label>رقم السيارة</label><input type="text" id="fTNum"></div>
+            <div class="form-group"><label>نوع المنتج</label><input type="text" id="fProd"></div>
+            <div class="form-group"><label>الكمية</label><input type="text" id="fQty"></div>
+        </div>
+        <div class="form-group"><label>ملاحظات</label><textarea id="fNotes" rows="2"></textarea></div>
+        
+        <div id="submitLoader" class="loader">جاري الحفظ في Google Sheets... ⏳</div>
+        <button id="submitBtn" class="btn btn-green" onclick="submitOrder()">حفظ وإصدار JAB Series ⚡</button>
+        <button class="btn btn-red" style="margin-top:10px;" onclick="showPage('page-admin')">إلغاء والعودة</button>
+    </div>
+
+    <div id="page-print" class="page">
+        <div class="no-print" style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="btn btn-green" onclick="window.print()">🖨️ طباعة</button>
+            <button class="btn" onclick="showPage('page-admin')">العودة للأرشيف</button>
+        </div>
+        <div class="pdf-box">
+            <div class="official-header">
+                <div>مؤسسة الجبرين للتجارة والنقل<br>س.ت: 1010058897</div>
+                <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEg-Q2OEZxF_nqZ420taE2U-Fxw4JKnUm2vahRGv7ZfviOELskARLBaUVrDpT27RN1WKbLVs-xU4ne8O1cV_SGamgkso2Okj84EFTY6N2m4K9A1y-J25aKPC5iipBmbtdnUxiDEB3YbmI0t6y95Xahtuf8lciXY4PT7iE_KY5-NPcLSAO8yRMRdzApMQK9pL/s200/Gemini_Generated_Image_gnro4fgnro4fgnro.png" width="70">
+                <div style="text-align:left">Al-Jabreen Transport<br>Building Materials</div>
+            </div>
+            <h1 style="text-align:center; text-decoration: underline;">أمر تحميل</h1>
+            <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                <p>رقم الطلب: <span id="v-id" style="color:red"></span></p>
+                <p>التاريخ: <span id="v-date"></span></p>
+            </div>
+            <hr>
+            <p>السادة / <b id="v-name"></b> المحترمين</p>
+            <p>كود العميل: <span id="v-code"></span></p>
+            <p>اسم السائق: <b id="v-driver"></b></p>
+            <p>رقم السيارة: <b id="v-tnum"></b></p>
+            <p>المنتج: <b id="v-prod"></b> | الكمية: <b id="v-qty"></b></p>
+            <p>الملاحظات: <span id="v-notes"></span></p>
+            <div style="margin-top:50px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="v-qr"></div>
+                <div style="text-align:center">
+                    <p>ختم المؤسسة</p>
+                    <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgByZuXYx_W1kOMVBmxQWh6dex3XwWq1wLPc2oUMoJtnDVB9kF3B-zdcMgdRxUtLWdxPE7Oo8jaY-pAS06TRwvrvo4uOBttnnxOW5gVy1PvIoU-USgmcfW5RxXCyNckr4QF1RZ0LIZHKct952cpTLchJjnCkT-WfHdn8l5rSXlofRFqPQBHu4tVcWZ_xyqv/w200-h125/Gemini_Generated_Image_m5tmr4m5tmr4m5tm.png" width="150">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 🔗 ضع رابط Google Web App هنا
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw8Ucw-IcUAvnht7dlr4dFMXNs3-3wp9t0ww8syCmpF6iDM0vAKsW4U1y8JaCqVHkNF/exec";
+
+    let currentUser = null;
+    let archiveData = [];
+    let usersList = [];
+
+    // تحميل البيانات الأولية
+    window.onload = async () => {
+        await fetchUsers();
+    };
+
+   async function fetchUsers() {
+    try {
+        const res = await fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            body: JSON.stringify({ action: 'getUsers' }) 
+        });
+        const data = await res.json();
+        // التحقق من أن البيانات مصفوفة وليست فارغة
+        usersList = Array.isArray(data) ? data : [];
+        
+        const sel = document.getElementById('loginUserSelect');
+        if(usersList.length > 0) {
+            sel.innerHTML = usersList.map(u => `<option value="${u.name}">${u.name}</option>`).join('');
+        } else {
+            sel.innerHTML = '<option value="إدارة النظام">إدارة النظام (حساب الطوارئ)</option>';
+        }
+    } catch (e) { 
+        console.error("خطأ في جلب الموظفين:", e);
+        document.getElementById('loginUserSelect').innerHTML = '<option value="إدارة النظام">إدارة النظام (دخول احتياطي)</option>';
+    }
+}
+
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'page-admin') fetchArchive();
+    }
+
+    async function handleLogin() {
+        const name = document.getElementById('loginUserSelect').value;
+        const pass = document.getElementById('loginPass').value;
+        const user = usersList.find(u => u.name === name && u.pass == pass);
+        
+        if(user || (name === "إدارة النظام" && pass === "1920")) { // دخول طوارئ
+            currentUser = user || {name: "إدارة النظام", role: "admin"};
+            showPage('page-admin');
+        } else {
+            alert("كلمة المرور خاطئة");
+        }
+    }
+
+    async function addNewUser() {
+        const name = document.getElementById('newUserName').value;
+        const pass = document.getElementById('newUserPass').value;
+        if(!name || !pass) return alert("اكمل البيانات");
+        
+        await fetch(SCRIPT_URL, { 
+            method: 'POST', 
+            mode: 'no-cors', 
+            body: JSON.stringify({ action: 'addUser', data: {name, pass, role: 'staff'} }) 
+        });
+        alert("تمت الإضافة بنجاح (سيظهر بعد تحديث الصفحة)");
+        location.reload();
+    }
+
+    async function fetchArchive() {
+        document.getElementById('archiveLoader').style.display = 'block';
+        try {
+            const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getArchive' }) });
+            archiveData = await res.json();
+            renderArchive();
+        } catch (e) { console.error("Error archive"); }
+        document.getElementById('archiveLoader').style.display = 'none';
+    }
+
+    function renderArchive() {
+        const body = document.getElementById('archiveBody');
+        body.innerHTML = archiveData.reverse().map(item => `
+            <tr>
+                <td>${item.id}</td><td>${item.date}</td><td>${item.client}</td>
+                <td>${item.driver}</td><td>${item.truck}</td><td>${item.prod}</td>
+                <td><button onclick="viewOrder('${item.id}')">👁️</button></td>
+            </tr>
+        `).join('');
+    }
+
+    async function submitOrder() {
+        const order = {
+            id: "JAB-" + (archiveData.length + 1001),
+            date: new Date().toLocaleDateString('ar-SA'),
+            timestamp: Date.now(),
+            user: currentUser.name,
+            code: document.getElementById('fCode').value,
+            client: document.getElementById('fName').value,
+            driver: document.getElementById('fDriver').value,
+            truck: document.getElementById('fTNum').value,
+            prod: document.getElementById('fProd').value,
+            qty: document.getElementById('fQty').value,
+            notes: document.getElementById('fNotes').value
+        };
+
+        document.getElementById('submitBtn').style.display = 'none';
+        document.getElementById('submitLoader').style.display = 'block';
+
+        try {
+            await fetch(SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ action: 'saveOrder', data: order })
+            });
+            fillPrint(order);
+            showPage('page-print');
+        } catch (e) { alert("خطأ في الاتصال"); }
+        
+        document.getElementById('submitBtn').style.display = 'block';
+        document.getElementById('submitLoader').style.display = 'none';
+    }
+
+    function fillPrint(order) {
+        document.getElementById('v-id').innerText = order.id;
+        document.getElementById('v-date').innerText = order.date;
+        document.getElementById('v-code').innerText = order.code;
+        document.getElementById('v-name').innerText = order.client;
+        document.getElementById('v-driver').innerText = order.driver;
+        document.getElementById('v-tnum').innerText = order.truck;
+        document.getElementById('v-prod').innerText = order.prod;
+        document.getElementById('v-qty').innerText = order.qty;
+        document.getElementById('v-notes').innerText = order.notes || '-';
+        document.getElementById('v-qr').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${order.id}">`;
+    }
+
+    function viewOrder(id) {
+        const order = archiveData.find(o => o.id === id);
+        fillPrint(order);
+        showPage('page-print');
+    }
+</script>
+</body>
+</html>
